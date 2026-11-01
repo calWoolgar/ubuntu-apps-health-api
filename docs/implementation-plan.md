@@ -4,7 +4,9 @@
 
 **Architecture:** A .NET 10 Minimal API uses ASP.NET Core's built-in health checks at `GET /health`. A root endpoint identifies the service. Docker Compose runs one non-root container with a health probe and restart policy. Deployment uses SSH and builds on the target VM if appropriate for its existing setup.
 
-**Defaults chosen:** Private repository `woolgarmedia/ubuntu-apps-health-api`; HTTP port 8080 unless the VM already uses it; no database, authentication, or public DNS needed for this health-only service. Inspect the VM before changing it, and preserve its existing workloads.
+**Repository:** Private `calWoolgar/ubuntu-apps-health-api`, as specified by the user.
+
+**Defaults chosen:** HTTP port 8080 unless the VM already uses it; no database, authentication, or public DNS needed for this health-only service. Inspect the VM before changing it, and preserve its existing workloads.
 
 ## Tasks
 
@@ -24,13 +26,13 @@
 ## Progress
 
 - Workspace initially empty; no existing Git checkout to isolate.
-- GitHub CLI authenticated as `woolgarmedia`; its initial network error was caused by sandbox networking.
+- GitHub CLI access is available; the user explicitly identified `calWoolgar` as the personal repository owner.
 - System has .NET runtimes but no SDK. Installing an SDK under the task's `work/` directory.
 - Apps VM confirmed as `devadmin@ubuntu-apps` on the LAN. Authenticated in a temporary interactive SSH session using the existing key.
 - Release build passed with zero warnings/errors. The smoke checks failed with HTTP 404 before endpoint implementation, then all three passed after implementation.
 - Compose configuration passed validation. Local Docker Desktop has an existing startup failure in its inference socket; container verification will use GitHub Actions and the Ubuntu VM instead of changing the workstation's Docker installation.
 - Independent source review found no blocking defects. Updated deployment instructions to extract clean releases and preserve shared configuration, addressing its one documentation finding.
 - VM preflight found port 8080 free and 29 GB disk space available. Installed Docker, Compose, and Buildx from Ubuntu's signed repositories, and enabled Docker startup.
-- Source pushed to the private `woolgarmedia/ubuntu-apps-health-api` repository. GitHub Actions run 41272052723 passed container health, all three HTTP smoke checks, and non-root runtime verification.
+- GitHub Actions run 41272052723 passed container health, all three HTTP smoke checks, and non-root runtime verification. The repository destination is `calWoolgar/ubuntu-apps-health-api`.
 - Deployed runtime source revision `26bf6b0` in a clean release directory. Docker reports `healthy`, UID 1654, read-only root filesystem, and `unless-stopped`. Docker is enabled and active.
 - All three HTTP smoke checks passed from the workstation against `http://192.168.1.87:8080`. Exact deployment paths and operations are recorded in `docs/deployment.md`.

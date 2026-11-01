@@ -21,7 +21,7 @@ Installed `docker.io`, `docker-compose-v2`, and `docker-buildx` from Ubuntu's pa
 Verification:
 
 - Release build: zero warnings and zero errors.
-- [GitHub Actions container checks](https://github.com/woolgarmedia/ubuntu-apps-health-api/actions/runs/41272052723): passed.
+- [GitHub Actions container checks](https://github.com/calWoolgar/ubuntu-apps-health-api/actions/runs/41272052723): passed.
 - Docker health status on the VM: `healthy`.
 - Container user: `app`, UID 1654; root filesystem is read-only.
 - All three HTTP smoke checks passed from the Windows workstation against the VM's LAN address: health body/status/cache headers, root metadata, and unknown-route 404.
