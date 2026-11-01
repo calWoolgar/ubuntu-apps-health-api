@@ -24,7 +24,7 @@ In another PowerShell terminal, run the HTTP smoke checks:
 ./scripts/SmokeTest.ps1 -BaseUri http://localhost:8080
 ```
 
-GitHub Actions builds and starts the actual container, waits for Docker health to pass, runs these same HTTP checks, and verifies that the runtime user is non-root on every push and pull request.
+GitHub Actions runs the deployment-script tests, builds and starts the actual container, waits for Docker health to pass, runs these same HTTP checks, and verifies that the runtime user is non-root on every push and pull request.
 
 ## Run in Docker
 
@@ -40,43 +40,21 @@ The API binds to the host's loopback address by default. To allow LAN access, co
 
 The multi-stage image uses Microsoft's .NET 10 Alpine images and runs as the built-in non-root `app` user on container port 8080. Docker probes `/health` every 30 seconds. Compose starts the service after a host reboot unless manually stopped, drops Linux capabilities, uses a read-only root filesystem, and rotates logs. An unhealthy health probe alone does not restart a running process; a process exit does trigger the restart policy.
 
-## Deploy or update Ubuntu Apps
+## Deploy automatically
 
-SSH access as `devadmin@ubuntu-apps` and permission to use Docker on the VM are required. No GitHub credential needs to be copied to the VM.
-
-On a fresh Ubuntu VM, install Docker and its Compose/build plugins, and enable startup:
+Push to `main` in [calWoolgar/ubuntu-apps-health-api](https://github.com/calWoolgar/ubuntu-apps-health-api):
 
 ```sh
-sudo apt-get update
-sudo apt-get install -y docker.io docker-compose-v2 docker-buildx
-sudo systemctl enable --now docker
+git push origin main
 ```
 
-From a local checkout, archive the committed source:
+The [workflow](https://github.com/calWoolgar/ubuntu-apps-health-api/actions/workflows/ci.yaml) first tests the deployment script and container on GitHub-hosted Linux. After those checks pass, a repository-specific self-hosted runner on `ubuntu-apps` deploys the exact tested commit. Pull requests and other branches run tests without deploying.
 
-```powershell
-git archive --format=tar.gz --output=../health-api-source.tar.gz HEAD
-scp ../health-api-source.tar.gz devadmin@ubuntu-apps:~/health-api-source.tar.gz
-ssh devadmin@ubuntu-apps
-```
+Deployments queue without interrupting an active deployment. Superseded commits are skipped. Each release contains only committed source, and its image is tagged with the full commit SHA. Docker and HTTP health checks must pass before `current` switches to the new release. A failed build leaves the running API untouched; failed activation or HTTP verification attempts to restore the previous image and keeps the previous `current` pointer.
 
-On the VM, inspect `docker ps` and `ss -lnt` first to choose an unused host port. Then:
+The VM's shared `.env` is preserved. Its `IMAGE_TAG` value is overridden with each deployed commit's SHA. The API remains at <http://192.168.1.87:8080/health>. The runner connects outbound to GitHub; deployments do not require public SSH access or a stored personal GitHub token. Container replacement causes a short interruption.
 
-```sh
-deploy_root="$HOME/apps/ubuntu-apps-health-api"
-mkdir -p "$deploy_root/releases"
-release_dir=$(mktemp -d "$deploy_root/releases/release-XXXXXXXX")
-tar -xzf ~/health-api-source.tar.gz -C "$release_dir"
-test -f "$deploy_root/.env" || cp "$release_dir/.env.example" "$deploy_root/.env"
-# Edit "$deploy_root/.env" to choose the VM's LAN address and a free port.
-# Only switch the current-release pointer after the command succeeds.
-sudo docker compose --env-file "$deploy_root/.env" -f "$release_dir/compose.yaml" up -d --build --wait --wait-timeout 120 && ln -sfn "$release_dir" "$deploy_root/current"
-sudo docker compose --env-file "$deploy_root/.env" -f "$deploy_root/current/compose.yaml" ps
-# Replace the address and port below with the values in .env.
-curl --fail http://VM_LAN_IP:HOST_PORT/health
-```
-
-Repeat the archive, transfer, and VM commands after pulling source updates. Each update extracts into a clean release directory, so files removed from Git cannot linger. The shared `.env` file is preserved, and the Compose project name stays `ubuntu-apps-health-api`. `--wait` succeeds only when the container is healthy. This deployment has a short interruption during container replacement. Keep previous release directories until you no longer need their source.
+## VM operations and rollback
 
 Useful commands from the deployment root (`~/apps/ubuntu-apps-health-api`):
 
@@ -85,5 +63,15 @@ sudo docker compose --env-file .env -f current/compose.yaml logs --tail 100 api
 sudo docker compose --env-file .env -f current/compose.yaml restart api
 sudo docker compose --env-file .env -f current/compose.yaml down
 ```
+
+To restore a preserved release, choose its directory and run:
+
+```sh
+release_dir="$PWD/releases/26bf6b0" # Replace with the release to restore.
+revision=$(cat "$release_dir/.deploy-revision" 2>/dev/null || basename "$release_dir")
+sudo env IMAGE_TAG="$revision" docker compose --env-file .env -f "$release_dir/compose.yaml" up -d --no-build --wait --wait-timeout 120 && ln -sfn "$release_dir" current
+```
+
+The next successful push to `main` resumes automatic deployment. Keep previous release directories and image tags while they are needed for rollback. See [deployment details](docs/deployment.md) for runner-service operations.
 
 The service uses HTTP and has no authentication. Configure HTTPS at an existing reverse proxy before giving it a public internet hostname.

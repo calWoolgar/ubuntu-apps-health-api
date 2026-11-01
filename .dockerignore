@@ -6,5 +6,6 @@
 .env.*
 docs
 scripts
+tests
 README.md
 *.log

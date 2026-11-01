@@ -1,4 +1,4 @@
-name: Build and test container
+name: Build, test, and deploy
 
 on:
   push:
@@ -15,6 +15,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - name: Test deployment orchestration
+        run: python3 -m unittest discover -s tests -v
       - name: Build and start a healthy container
         run: docker compose up -d --build --wait --wait-timeout 120
       - name: Check API responses
@@ -30,3 +32,43 @@ jobs:
       - name: Stop the test container
         if: always()
         run: docker compose down
+
+  deploy:
+    name: Deploy to ubuntu-apps
+    needs: container-smoke-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'calWoolgar/ubuntu-apps-health-api'
+    runs-on: [self-hosted, Linux, X64, ubuntu-apps-health-api]
+    timeout-minutes: 15
+    concurrency:
+      group: ubuntu-apps-health-api-production
+      queue: max
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Skip superseded commits
+        id: current
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          main_sha=$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/git/ref/heads/main" \
+            | python3 -c 'import json, sys; print(json.load(sys.stdin)["object"]["sha"])')
+          if [[ "$main_sha" == "$GITHUB_SHA" ]]; then
+            echo 'deploy=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'Skipping this deployment because main has a newer commit.'
+          fi
+      - name: Deploy the tested revision and verify health
+        if: steps.current.outputs.deploy == 'true'
+        env:
+          DEPLOY_ROOT: /home/devadmin/apps/ubuntu-apps-health-api
+          DEPLOY_HEALTH_URL: http://192.168.1.87:8080/health
+        run: bash scripts/Deploy.sh "$GITHUB_SHA"
+      - name: Record deployment
+        if: steps.current.outputs.deploy == 'true'
+        run: |
+          echo "Deployed commit $GITHUB_SHA to [ubuntu-apps](http://192.168.1.87:8080/health)." >> "$GITHUB_STEP_SUMMARY"
