@@ -29,6 +29,7 @@ Verification:
 - Docker health status on the VM: `healthy`.
 - Container user: `app`, UID 1654; root filesystem is read-only.
 - All three HTTP smoke checks passed from the Windows workstation against the VM's LAN address: health body/status/cache headers, root metadata, and unknown-route 404.
+- [Automatic deployment verification](https://github.com/calWoolgar/ubuntu-apps-health-api/actions/runs/41273066930): a push to `main` passed hosted CI and deployed the same commit through the VM runner. The running image tag and release metadata matched the pushed SHA, and workstation HTTP smoke checks passed afterward.
 
 To inspect the deployment:
 
