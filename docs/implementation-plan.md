@@ -26,6 +26,8 @@
 - Workspace initially empty; no existing Git checkout to isolate.
 - GitHub CLI authenticated as `woolgarmedia`; its initial network error was caused by sandbox networking.
 - System has .NET runtimes but no SDK. Installing an SDK under the task's `work/` directory.
-- Apps VM confirmed as `devadmin@ubuntu-apps` on the LAN. Its SSH server accepts the existing key; the passphrase-protected key must be loaded into the local SSH agent to sign authentication requests.
+- Apps VM confirmed as `devadmin@ubuntu-apps` on the LAN. Authenticated in a temporary interactive SSH session using the existing key.
 - Release build passed with zero warnings/errors. The smoke checks failed with HTTP 404 before endpoint implementation, then all three passed after implementation.
 - Compose configuration passed validation. Local Docker Desktop has an existing startup failure in its inference socket; container verification will use GitHub Actions and the Ubuntu VM instead of changing the workstation's Docker installation.
+- Independent source review found no blocking defects. Updated deployment instructions to extract clean releases and preserve shared configuration, addressing its one documentation finding.
+- VM has no Docker installed, port 8080 is free, and 29 GB disk space is available. Docker installation requires sudo authentication.
