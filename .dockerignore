@@ -1,0 +1,10 @@
+**/bin
+**/obj
+.git
+.github
+.env
+.env.*
+docs
+scripts
+README.md
+*.log
