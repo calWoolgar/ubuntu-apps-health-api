@@ -4,7 +4,7 @@
 
 **Architecture:** A .NET 10 Minimal API uses ASP.NET Core's built-in health checks at `GET /health`. A root endpoint identifies the service. Docker Compose runs one non-root container with a health probe and restart policy. Deployment uses SSH and builds on the target VM if appropriate for its existing setup.
 
-**Repository:** Private `calWoolgar/ubuntu-apps-health-api`, as specified by the user.
+**Repository:** Public `calWoolgar/ubuntu-apps-health-api`, as specified by the user.
 
 **Defaults chosen:** HTTP port 8080 unless the VM already uses it; no database, authentication, or public DNS needed for this health-only service. Inspect the VM before changing it, and preserve its existing workloads.
 

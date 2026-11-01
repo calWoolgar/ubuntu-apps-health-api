@@ -54,7 +54,10 @@ if "up" in args and tag == os.environ["NEW_REVISION"] and os.environ.get("FAIL_U
         docker.chmod(0o755)
         curl = bin_dir / "curl"
         curl.write_text('''#!/usr/bin/env python3
-import os, sys
+import json, os, sys
+if sys.argv[-1].endswith("/version"):
+    print(json.dumps({"commitSha": os.environ.get("VERSION_SHA", os.environ["NEW_REVISION"])}))
+    sys.exit(0)
 if os.environ.get("FAIL_HEALTH") == "1":
     sys.exit(22)
 print(os.environ.get("HEALTH_BODY", "Healthy"), end="")
@@ -137,6 +140,13 @@ print(os.environ.get("HEALTH_BODY", "Healthy"), end="")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("revision", result.stderr.lower())
         self.assertEqual(self.calls(), [])
+
+    def test_wrong_deployed_commit_rolls_back(self):
+        result = self.deploy(VERSION_SHA="b" * 40)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((self.deploy_root / "current").resolve(), self.previous)
+        activation = [call for call in self.calls() if "up" in call["args"]]
+        self.assertEqual([call["tag"] for call in activation], [self.revision, "26bf6b0"])
 
 
 if __name__ == "__main__":

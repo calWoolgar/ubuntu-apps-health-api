@@ -1,24 +1,23 @@
-# Automatic deployment plan
+# Public automatic deployment and version reporting
 
-**Goal:** A push to `main` in `calWoolgar/ubuntu-apps-health-api` automatically deploys the API to `ubuntu-apps` after container CI passes.
+**Goal:** Pushes to the public `calWoolgar/ubuntu-apps-health-api` repository deploy successful `main` revisions to `ubuntu-apps`; `/version` reports the exact compiled commit SHA.
 
-**Architecture:** Keep tests on GitHub-hosted Linux. Add a repository-specific Linux runner service on the private Apps VM. A dependent job runs only for this repository's `main` pushes, serializes deployments, and skips a commit if it is no longer the main branch head. No inbound SSH access or stored GitHub personal token is needed for deployments.
+**Architecture:** All CI runs on GitHub-hosted Linux. A VM systemd timer checks the public main branch every two minutes. The installed Python dispatcher requires a successful push CI run for the exact SHA, branch, workflow, and repository before executing that commit's deployment script. A file lock serializes deployment checks. The previous private-repository self-hosted runner is stopped and unregistered before changing visibility.
 
-**Deployment contract:** Build the exact tested Git revision into a new release directory and image tag. Preserve the VM's shared `.env`. Only update `current` after Docker and HTTP health checks pass. If activation or HTTP verification fails, restore the previous image and leave `current` unchanged. Build failures leave the running release untouched.
+**Deployment contract:** Build the tested Git revision into a clean release and SHA-tagged image. Embed `COMMIT_SHA` in the compiled assembly and OCI image label. Preserve the VM's shared `.env`. Promote `current` only after Docker health, HTTP health, and the `/version` SHA all pass. Failed activation or verification attempts to restore the previous image; failed builds leave the running API untouched.
 
-## Tasks
+## Validation and rollout
 
-- [x] Write and run deployment-script tests covering success, failed build, failed activation, failed HTTP health, missing configuration, and invalid revision input.
-- [x] Implement the script and prove all tests pass against controlled Docker/HTTP substitutes.
-- [x] Add the guarded deploy job after the existing real-container CI checks, and review the workflow and script.
-- [x] Install and register the official checksum-verified runner as a service on `ubuntu-apps`; verify it is online and can access Docker.
-- [x] Push to `main` and verify the workflow deploys that exact commit without a manual deployment command.
-- [x] Verify the API across the LAN, record the runner/service operations, and confirm the Git working tree and remote agree.
+- Verify the `/version` smoke check fails before endpoint implementation, then passes against a Release build stamped with a known SHA.
+- Verify failed CI, PR/fork runs, other branches, different workflows, and wrong SHAs cannot pass the dispatcher's gate.
+- Verify version mismatch rolls back alongside the existing deployment failure tests.
+- Inspect all repository history for committed credentials before making it public.
+- Install the dispatcher and units, allowing three minutes for shutdown so a 120-second rollback health wait can finish.
+- Push the reviewed changes to main, remove the old runner, make the repository public, and enable the timer.
+- Confirm hosted container CI passes and the timer deploys the pushed SHA; compare `/version`, release metadata, image label/tag, and GitHub main.
 
-## Verification
+## Pre-rollout evidence
 
-- All seven deployment-script tests passed on Ubuntu, including build failures and activation/HTTP rollback paths.
-- Independent review found a pending-job replacement race; `queue: max` now preserves pending deployments while the main-head check skips stale commits.
-- [Push-triggered integration run 41273066930](https://github.com/calWoolgar/ubuntu-apps-health-api/actions/runs/41273066930) passed hosted container CI and the self-hosted deployment job.
-- That run deployed exact source revision `7c943bae5cb863d1bf0f2c5b30e1b0fdd3a2ab64`, confirmed by both the running image tag and `current/.deploy-revision` on the VM.
-- Docker reported `healthy`, and all three HTTP smoke checks passed from the workstation over the LAN after deployment.
+- Release build passed with zero warnings/errors; all four HTTP checks passed with the exact stamped SHA.
+- All nine Ubuntu deployment and public-CI gate tests passed after observing the new mismatch/gate tests fail before implementation.
+- All six existing Git commits and their tracked file lists were checked for private-key/access-token patterns; none were found.

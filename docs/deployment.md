@@ -6,6 +6,7 @@ Deployed and verified on 1 November 2026.
 | --- | --- |
 | SSH target | `devadmin@ubuntu-apps` |
 | Health endpoint | <http://192.168.1.87:8080/health> |
+| Deployed version | <http://192.168.1.87:8080/version> |
 | Service metadata | <http://192.168.1.87:8080/> |
 | Deployment root | `/home/devadmin/apps/ubuntu-apps-health-api` |
 | Active source release | `current` symlink to the latest successful release under `releases/` |
@@ -16,9 +17,12 @@ Deployed and verified on 1 November 2026.
 | Shared configuration | `/home/devadmin/apps/ubuntu-apps-health-api/.env` |
 | Network exposure | VM LAN IPv4 address, HTTP port 8080 |
 | Deployment trigger | Successful container CI for a push to `main` |
-| Repository runner | `ubuntu-apps-health-api` |
-| Runner directory | `/home/devadmin/actions-runner-health-api` |
-| Runner service user | `devadmin`, with Docker group access |
+| Deployment mechanism | VM checks successful public `main` push builds every two minutes |
+| Deployer service | `ubuntu-apps-health-api-deploy.service` |
+| Deployer timer | `ubuntu-apps-health-api-deploy.timer` |
+| Deployer service user | `devadmin`, with Docker group access |
+| Public source checkout | `/home/devadmin/apps/ubuntu-apps-health-api/source` |
+| Installed dispatcher | `/home/devadmin/apps/ubuntu-apps-health-api/deployer/PollDeploy.py` |
 
 Installed `docker.io`, `docker-compose-v2`, and `docker-buildx` from Ubuntu's package repositories. Docker is active and enabled at host startup. The container uses the `unless-stopped` restart policy; no VM reboot was performed.
 
@@ -28,8 +32,8 @@ Verification:
 - [GitHub Actions container checks](https://github.com/calWoolgar/ubuntu-apps-health-api/actions/runs/41272052723): passed.
 - Docker health status on the VM: `healthy`.
 - Container user: `app`, UID 1654; root filesystem is read-only.
-- All three HTTP smoke checks passed from the Windows workstation against the VM's LAN address: health body/status/cache headers, root metadata, and unknown-route 404.
-- [Automatic deployment verification](https://github.com/calWoolgar/ubuntu-apps-health-api/actions/runs/41273066930): a push to `main` passed hosted CI and deployed the same commit through the VM runner. The running image tag and release metadata matched the pushed SHA, and workstation HTTP smoke checks passed afterward.
+- HTTP smoke checks cover health status/body/cache headers, root metadata, exact `/version` SHA, and unknown-route 404. Pass `-ExpectedCommitSha <SHA>` to `scripts/SmokeTest.ps1` when checking a deployed revision.
+- The initial private-repository runner deployment was verified by [run 41273066930](https://github.com/calWoolgar/ubuntu-apps-health-api/actions/runs/41273066930). Public deployment uses the timer described below instead.
 
 To inspect the deployment:
 
@@ -40,17 +44,28 @@ sudo docker compose --env-file .env -f current/compose.yaml ps
 sudo docker compose --env-file .env -f current/compose.yaml logs --tail 100 api
 ```
 
-Push updates to `main`; no manual source transfer is needed. The runner uses its repository-scoped registration credentials and short-lived per-job tokens. No personal GitHub token or SSH private key is stored on the VM. The original `releases/26bf6b0` and matching image remain available for rollback.
+Push updates to `main`; no manual source transfer is needed. The VM reads GitHub's public Git and workflow APIs without credentials and checks the exact repository, branch, SHA, workflow, event, status, and conclusion before executing deployment code. Fork and PR runs cannot pass this gate. No personal GitHub token or SSH private key is stored on the VM. The original `releases/26bf6b0` and matching image remain available for rollback.
 
-To inspect or restart the runner:
+To inspect the timer and its deployment logs:
 
 ```sh
-cd ~/actions-runner-health-api
-sudo ./svc.sh status
-sudo ./svc.sh stop
-sudo ./svc.sh start
+systemctl status ubuntu-apps-health-api-deploy.timer --no-pager
+sudo journalctl -u ubuntu-apps-health-api-deploy.service -n 100 --no-pager
+sudo systemctl stop ubuntu-apps-health-api-deploy.timer
+sudo systemctl start ubuntu-apps-health-api-deploy.timer
 ```
 
-Its systemd unit is `actions.runner.calWoolgar-ubuntu-apps-health-api.ubuntu-apps-health-api.service`, enabled at host startup. Runner updates are managed by GitHub's runner application. If the VM or runner is offline, deployment jobs queue until it is available. Inspect [workflow runs](https://github.com/calWoolgar/ubuntu-apps-health-api/actions/workflows/ci.yaml) for CI, deployment, and rollback logs.
+The timer starts after boot and checks again two minutes after the previous check finishes. The file lock serializes checks. Failed CI, unavailable GitHub, or an offline VM leaves the current API in place; the next check retries. CI uses GitHub-hosted runners, and the old repository-specific VM runner is removed before making the repository public.
 
-To rebuild this setup on a replacement Ubuntu VM, install `docker.io`, `docker-compose-v2`, `docker-buildx`, Git, Python 3, and curl. Restore the deployment root and shared `.env`, enable Docker, grant the runner's service account Docker access, then register and install a repository-specific runner following [GitHub's runner setup instructions](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners). Use the runner label `ubuntu-apps-health-api` to match the workflow.
+To rebuild this setup on a replacement Ubuntu VM, install `docker.io`, `docker-compose-v2`, `docker-buildx`, Git, Python 3, and curl. Restore the deployment root and shared `.env`, enable Docker, and grant `devadmin` Docker group access. From a reviewed checkout, install the dispatcher and units:
+
+```sh
+mkdir -p ~/apps/ubuntu-apps-health-api/deployer
+install -m 755 scripts/PollDeploy.py ~/apps/ubuntu-apps-health-api/deployer/PollDeploy.py
+sudo install -m 644 deploy/ubuntu-apps-health-api-deploy.service /etc/systemd/system/
+sudo install -m 644 deploy/ubuntu-apps-health-api-deploy.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now ubuntu-apps-health-api-deploy.timer
+```
+
+The installed dispatcher lives outside the source checkout. Changes to `PollDeploy.py` or the systemd units require repeating these installation commands; application and `Deploy.sh` changes are pulled automatically after CI passes.

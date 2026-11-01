@@ -1,5 +1,6 @@
 param(
-    [Uri] $BaseUri = 'http://localhost:8080'
+    [Uri] $BaseUri = 'http://localhost:8080',
+    [string] $ExpectedCommitSha
 )
 
 $ErrorActionPreference = 'Stop'
@@ -37,6 +38,23 @@ try {
     }
     finally { $response.Dispose() }
 
+    $response = $client.GetAsync('/version').GetAwaiter().GetResult()
+    try {
+        Assert-True ([int] $response.StatusCode -eq 200) 'GET /version must return HTTP 200.'
+        Assert-True ($response.Content.Headers.ContentType.MediaType -eq 'application/json') 'Version response must be JSON.'
+        Assert-True ($response.Headers.CacheControl.NoStore) 'Version responses must not be cached.'
+        $body = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+        if ($ExpectedCommitSha) {
+            Assert-True ($body.commitSha -cmatch '^[0-9a-f]{40}$') 'Deployed commit SHA must be a full Git SHA.'
+            Assert-True ($body.commitSha -ceq $ExpectedCommitSha) "Version returned '$($body.commitSha)'; expected '$ExpectedCommitSha'."
+        }
+        else {
+            Assert-True ($body.commitSha -cmatch '^(unknown|[0-9a-f]{40})$') 'Version must identify the commit or an unstamped local build.'
+        }
+        Write-Output "PASS: /version reports commit $($body.commitSha)."
+    }
+    finally { $response.Dispose() }
+
     $response = $client.GetAsync('/does-not-exist').GetAwaiter().GetResult()
     try {
         Assert-True ([int] $response.StatusCode -eq 404) 'Unknown routes must return HTTP 404.'
@@ -44,7 +62,7 @@ try {
     }
     finally { $response.Dispose() }
 
-    Write-Output 'All 3 HTTP smoke checks passed.'
+    Write-Output 'All 4 HTTP smoke checks passed.'
 }
 finally {
     $client.Dispose()

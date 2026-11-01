@@ -1,7 +1,15 @@
+using System.Reflection;
+
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddHealthChecks();
 
 var app = builder.Build();
+var commitSha = typeof(Program).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+    .FirstOrDefault(attribute => attribute.Key == "CommitSha")?.Value;
+if (string.IsNullOrWhiteSpace(commitSha))
+{
+    commitSha = "unknown";
+}
 
 app.MapGet("/", () => Results.Ok(new
 {
@@ -10,5 +18,11 @@ app.MapGet("/", () => Results.Ok(new
 }));
 
 app.MapHealthChecks("/health");
+
+app.MapGet("/version", (HttpResponse response) =>
+{
+    response.Headers.CacheControl = "no-store";
+    return Results.Ok(new { commitSha });
+});
 
 app.Run();

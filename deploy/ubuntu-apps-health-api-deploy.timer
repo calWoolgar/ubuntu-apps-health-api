@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for a tested main build of Ubuntu Apps Health API
+
+[Timer]
+OnBootSec=30s
+OnUnitInactiveSec=2min
+AccuracySec=5s
+Unit=ubuntu-apps-health-api-deploy.service
+
+[Install]
+WantedBy=timers.target

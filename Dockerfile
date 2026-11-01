@@ -3,13 +3,16 @@ WORKDIR /src
 COPY src/HealthApi/HealthApi.csproj src/HealthApi/
 RUN dotnet restore src/HealthApi/HealthApi.csproj
 COPY src/HealthApi/ src/HealthApi/
+ARG COMMIT_SHA=unknown
 RUN dotnet publish src/HealthApi/HealthApi.csproj \
     --configuration Release --no-restore --output /app/publish \
-    /p:UseAppHost=false
+    /p:UseAppHost=false /p:SourceRevisionId="$COMMIT_SHA"
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS runtime
 WORKDIR /app
 ENV ASPNETCORE_HTTP_PORTS=8080
+ARG COMMIT_SHA=unknown
+LABEL org.opencontainers.image.revision=$COMMIT_SHA
 COPY --from=build /app/publish .
 USER $APP_UID
 EXPOSE 8080

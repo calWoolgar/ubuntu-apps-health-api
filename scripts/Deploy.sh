@@ -65,6 +65,7 @@ release_dir=$(mktemp -d "$deploy_root/releases/$revision.XXXXXXXX")
 git archive "$revision" | tar -x -C "$release_dir"
 printf '%s\n' "$revision" > "$release_dir/.deploy-revision"
 export IMAGE_TAG="$revision"
+export COMMIT_SHA="$revision"
 compose "$release_dir" config --quiet
 # Finish building before touching the currently running container.
 compose "$release_dir" build
@@ -74,6 +75,13 @@ health_body=$(curl --fail --silent --show-error --max-time 10 \
     --retry 3 --retry-delay 1 --retry-connrefused "$health_url")
 if [[ $health_body != Healthy ]]; then
     echo 'The deployed health endpoint did not return Healthy.' >&2
+    exit 1
+fi
+version_url=${DEPLOY_VERSION_URL:-"${health_url%/health}/version"}
+deployed_revision=$(curl --fail --silent --show-error --max-time 10 "$version_url" \
+    | python3 -c 'import json, sys; print(json.load(sys.stdin).get("commitSha", ""))')
+if [[ $deployed_revision != "$revision" ]]; then
+    echo "Version mismatch: expected $revision, received $deployed_revision." >&2
     exit 1
 fi
 ln -sfn "$release_dir" "$deploy_root/current"
