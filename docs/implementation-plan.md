@@ -9,9 +9,9 @@
 ## Tasks
 
 - [x] API: write HTTP smoke assertions before implementing the routes, observe them fail with the routes absent, implement `GET /health` (200, `Healthy`, no caching) and `GET /` (service metadata), and verify success and unknown-route 404.
-- [ ] Container: create a multi-stage Dockerfile, Compose health probe, `.dockerignore`, and `.gitignore`. Build and smoke-test the real container, including its non-root user and Docker health status.
-- [ ] Deployment: inspect the confirmed Apps VM, choose a free port, transfer only source files, build and start a dedicated Compose project, and verify health on the VM and from this computer. Record the exact URL and repeatable update instructions.
-- [ ] GitHub: review source for credentials, commit the tested implementation, create the private personal repository if absent, push, and verify the remote commit and visibility.
+- [x] Container: create a multi-stage Dockerfile, Compose health probe, `.dockerignore`, and `.gitignore`. Build and smoke-test the real container, including its non-root user and Docker health status.
+- [x] Deployment: inspect the confirmed Apps VM, choose a free port, transfer only source files, build and start a dedicated Compose project, and verify health on the VM and from this computer. Record the exact URL and repeatable update instructions.
+- [x] GitHub: review source for credentials, commit the tested implementation, create the private personal repository if absent, push, and verify the remote commit and visibility.
 
 ## Review focus
 
@@ -30,4 +30,7 @@
 - Release build passed with zero warnings/errors. The smoke checks failed with HTTP 404 before endpoint implementation, then all three passed after implementation.
 - Compose configuration passed validation. Local Docker Desktop has an existing startup failure in its inference socket; container verification will use GitHub Actions and the Ubuntu VM instead of changing the workstation's Docker installation.
 - Independent source review found no blocking defects. Updated deployment instructions to extract clean releases and preserve shared configuration, addressing its one documentation finding.
-- VM has no Docker installed, port 8080 is free, and 29 GB disk space is available. Docker installation requires sudo authentication.
+- VM preflight found port 8080 free and 29 GB disk space available. Installed Docker, Compose, and Buildx from Ubuntu's signed repositories, and enabled Docker startup.
+- Source pushed to the private `woolgarmedia/ubuntu-apps-health-api` repository. GitHub Actions run 41272052723 passed container health, all three HTTP smoke checks, and non-root runtime verification.
+- Deployed runtime source revision `26bf6b0` in a clean release directory. Docker reports `healthy`, UID 1654, read-only root filesystem, and `unless-stopped`. Docker is enabled and active.
+- All three HTTP smoke checks passed from the workstation against `http://192.168.1.87:8080`. Exact deployment paths and operations are recorded in `docs/deployment.md`.

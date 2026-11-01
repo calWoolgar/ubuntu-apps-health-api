@@ -44,6 +44,14 @@ The multi-stage image uses Microsoft's .NET 10 Alpine images and runs as the bui
 
 SSH access as `devadmin@ubuntu-apps` and permission to use Docker on the VM are required. No GitHub credential needs to be copied to the VM.
 
+On a fresh Ubuntu VM, install Docker and its Compose/build plugins, and enable startup:
+
+```sh
+sudo apt-get update
+sudo apt-get install -y docker.io docker-compose-v2 docker-buildx
+sudo systemctl enable --now docker
+```
+
 From a local checkout, archive the committed source:
 
 ```powershell
@@ -61,10 +69,9 @@ release_dir=$(mktemp -d "$deploy_root/releases/release-XXXXXXXX")
 tar -xzf ~/health-api-source.tar.gz -C "$release_dir"
 test -f "$deploy_root/.env" || cp "$release_dir/.env.example" "$deploy_root/.env"
 # Edit "$deploy_root/.env" to choose the VM's LAN address and a free port.
-docker compose --env-file "$deploy_root/.env" -f "$release_dir/compose.yaml" up -d --build --wait --wait-timeout 120
 # Only switch the current-release pointer after the command succeeds.
-ln -sfn "$release_dir" "$deploy_root/current"
-docker compose --env-file "$deploy_root/.env" -f "$deploy_root/current/compose.yaml" ps
+sudo docker compose --env-file "$deploy_root/.env" -f "$release_dir/compose.yaml" up -d --build --wait --wait-timeout 120 && ln -sfn "$release_dir" "$deploy_root/current"
+sudo docker compose --env-file "$deploy_root/.env" -f "$deploy_root/current/compose.yaml" ps
 # Replace the address and port below with the values in .env.
 curl --fail http://VM_LAN_IP:HOST_PORT/health
 ```
@@ -74,9 +81,9 @@ Repeat the archive, transfer, and VM commands after pulling source updates. Each
 Useful commands from the deployment root (`~/apps/ubuntu-apps-health-api`):
 
 ```sh
-docker compose --env-file .env -f current/compose.yaml logs --tail 100 api
-docker compose --env-file .env -f current/compose.yaml restart api
-docker compose --env-file .env -f current/compose.yaml down
+sudo docker compose --env-file .env -f current/compose.yaml logs --tail 100 api
+sudo docker compose --env-file .env -f current/compose.yaml restart api
+sudo docker compose --env-file .env -f current/compose.yaml down
 ```
 
 The service uses HTTP and has no authentication. Configure HTTPS at an existing reverse proxy before giving it a public internet hostname.
